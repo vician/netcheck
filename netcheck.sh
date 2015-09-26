@@ -3,81 +3,115 @@
 # @author Martin Vician <martin@vician.cz>
 
 ## Constants
-EXPECTED_GW=192.168.0.1
 IP=8.8.8.8
-DOMAIN="google-public-dns-a.google.com"
-DOMAIN_IP=8.8.8.8
+TEST_DOMAIN="www.google.com"
+TEST_IP_DOMAIN="google-public-dns-a.google.com"
+TEST_IP=8.8.8.8
 
-GW_PING_COUNT=4
-IP_PING_COUNT=4
+PING_COUNT=4
 
 EXIT_OK=0
 EXIT_WRONG_PARAM=1
 EXIT_NOT_INSTALLED=2
 EXIT_SYSTEM_FAILED=3
 
+### Variables ###
+GW=""
+DEBUG=1
+
 ## Functions
 
-function test_traceroute {
-	cmd="traceroute"
-	if [ -z "`which $cmd`" ] ; then
-		echo "ERROR: Program $cmd not installed!"
-		exit $EXIT_NOT_INSTALLED
+function debug {
+	if [ $DEBUG -eq 0 ]; then
+		return 0;
 	fi
-	$cmd $SERVER
+	echo "DEBUG:" $*
 }
 
-function verify_gw {
-	echo "Veryfing if default gateway is expected"
-	ip route show 2>/dev/null | grep default 1>/dev/null
+function error {
+	if [ $# -ne 2 ]; then
+		echo "ERROR: Function error() - wrong parameters! [$#: $*]"
+		exit $EXIT_WRONG_PARAM
+	fi
+	echo "ERROR:" $2
+	exit $1
+}
+
+function is_installed {
+	if [ $# -eq 0 ]; then
+		error $EXIT_WRONG_PARAM "Function is_installed() - wrong parameters! [$#: $*]"
+	fi
+	for program in $@; do
+		debug "testing $program: `which $program`"
+		which $program 1>/dev/null 2>/dev/null
+		if [ $? -ne 0 ]; then
+			echo "WARNING: Program $program not installed. Some functions will not work!"
+			return 1
+		fi
+	done
+}
+
+function get_gw {
+	ip route show 2>/dev/null | grep default 1>/dev/null 2>/dev/null
 	if [ $? -ne 0 ]; then
-		echo "ERROR: no default rote!"; exit $EXIT_SYSTEM_FAILED
+		exit $EXIT_SYSTEM_FAILED "Cannot find default route!"
 	fi
-	DEFAULT_GW=`ip route show 2>/dev/null | grep default | awk '{ print $3 }'`
-	if [ "$DEFAULT_GW" != "$EXPECTED_GW" ]; then
-		echo "WARNING: Expeced gateway isn't default gateway which was detected!"
+	GW=`ip route show 2>/dev/null | grep default 2>/dev/null | awk '{print $3}'`
+	if [ $GW == "" ]; then
+		error $EXIT_SYSTEM_FAILED "Cannot find default gateway!"
 	fi
-	netstat -nr 2>/dev/null | grep $EXPECTED_GW 1>/dev/null
-	if [ $? -ne 0 ] ; then
-		echo "ERROR Current gateway isn't expected!"
-		echo "Current is: $DEFAULT_GW"
-		echo "Expected is: $EXPECTED_GW"
-		exit 1
-	fi
+	debug "Founded GW: $GW"
 }
 
-function check_gw {
-	echo "Veryfing connection to default gateway (router)"
-	ping -c $GW_PING_COUNT $DEFAULT_GW 1>/dev/null 2>/dev/null
+function check_ping {
+	if [ $# -ne 1 ]; then
+		error $EXIT_WRONG_PARAM "Wrong pamateres check_ping() [$#: $*]"
+	fi
+	IP=$1
+	echo "Veryfing connection to test IP: $IP!"
+	if [ $DEBUG -eq 0 ]; then
+		ping -c $PING_COUNT $IP 1>/dev/null 2>/dev/null
+	else
+		ping -c $PING_COUNT $IP
+	fi
 	if [ $? -ne 0 ]; then
-		echo "ERROR: Connection to default gateway (router) isn't stable!"
-		echo "It can be a serious problem!"
+	        debug "Ping to $IP not works!"
+					return 1
+	else
+		debug "Ping to $IP works."
 	fi
-}
-
-function check_ip {
-	echo "Veryfing connection to test IP!"
-        ping -c $GW_PING_COUNT $IP 1>/dev/null 2>/dev/null
-        if [ $? -ne 0 ]; then
-                echo "ERROR: Connection to test IP isn't stable!"
-                echo "It can be a serious problem!"
-        fi
-
 }
 
 function check_dns {
-	echo "Veryfing DNS resolving"
-	host $DOMAIN 2>/dev/null | grep $DOMAIN_IP 1>/dev/null
+	is_installed host
+	if [ $? -ne 0 ]; then
+		error $EXIT_NOT_INSTALLED "Please install requirements (host)!"
+	fi
+	debug "Veryfing DNS resolving"
+	debug "Test DNS ($TEST_IP_DOMAIN): `host $TEST_IP_DOMAIN`"
+	host $TEST_IP_DOMAIN 2>/dev/null | grep $TEST_IP_DOMAIN 1>/dev/null
 	if [ $? -ne 0 ]; then
 		echo "ERROR: DNS resolving isn't stable!"
 		echo "It can be a serious problem!"
 	fi
 }
 
-verify_gw
-check_gw
-check_ip
+is_installed ip route ping
+if [ $? -ne 0 ]; then
+	error $EXIT_NOT_INSTALLED "Please install requirements (ip route ping)!"
+fi
+check_ping $TEST_DOMAIN
+if [ $? -eq 0 ] ; then
+	echo "Internet works. Are you sure that you want to run this analyzator?"
+	read -p "Continue (y/n)?" choice
+	case "$choice" in
+  	y|Y ) ;;
+  	n|N ) exit $EXIT_OK;;
+  	* ) echo "Invalid ansewer."; exit $EXIT_OK;
+	esac
+fi
+
+get_gw
+check_ping $GW
+
 check_dns
-
-
-#test_traceroute
