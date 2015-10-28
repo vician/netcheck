@@ -1,7 +1,7 @@
 netcheck
 ========
 
-# Diagnose your Internet connection and try to investigate potential problem
+Diagnose your Internet connection and try to investigate potential problem
 
 This small script checks if you are connected to the Internet. And if not, it tries to diagnose where is a problem.
 
