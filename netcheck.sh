@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# @author Martin Vician <martin@vician.cz>
+# @author Martin Vician <info@vician.cz>
 
 ## Constants
 IP=8.8.8.8
